@@ -10,30 +10,20 @@ import android.graphics.BitmapFactory;
 import android.graphics.ImageFormat;
 import android.graphics.Rect;
 import android.graphics.YuvImage;
-import android.hardware.camera2.CameraManager;
 import android.media.AudioManager;
 import android.media.Image;
 import android.media.MediaActionSound;
 import android.os.Build;
-import android.os.Environment;
 import android.os.Handler;
 import android.util.Log;
 import android.util.Rational;
 import android.util.Size;
 import android.view.MotionEvent;
-import android.view.Surface;
 import android.view.View;
-import android.widget.TextView;
-import android.widget.Toast;
-
 import androidx.annotation.NonNull;
-import androidx.appcompat.app.AppCompatActivity;
-import androidx.camera.camera2.internal.PreviewConfigProvider;
-import androidx.camera.core.AspectRatio;
 import androidx.camera.core.Camera;
 import androidx.camera.core.CameraControl;
 import androidx.camera.core.CameraSelector;
-import androidx.camera.core.CameraX;
 import androidx.camera.core.DisplayOrientedMeteringPointFactory;
 import androidx.camera.core.FocusMeteringAction;
 import androidx.camera.core.ImageAnalysis;
@@ -42,21 +32,22 @@ import androidx.camera.core.ImageCaptureException;
 import androidx.camera.core.ImageProxy;
 import androidx.camera.core.MeteringPoint;
 import androidx.camera.core.Preview;
-import androidx.camera.core.impl.PreviewConfig;
 import androidx.camera.lifecycle.ProcessCameraProvider;
 import androidx.camera.view.PreviewView;
-import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.lifecycle.LifecycleOwner;
-
 import com.google.common.util.concurrent.ListenableFuture;
-
+import io.flutter.embedding.engine.plugins.FlutterPlugin;
+import io.flutter.plugin.common.BinaryMessenger;
+import io.flutter.plugin.common.MethodCall;
+import io.flutter.plugin.common.MethodChannel;
+import io.flutter.plugin.common.PluginRegistry;
+import io.flutter.plugin.platform.PlatformView;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.text.SimpleDateFormat;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Objects;
@@ -64,37 +55,47 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 
-import io.flutter.embedding.engine.plugins.FlutterPlugin;
-import io.flutter.plugin.common.BinaryMessenger;
-import io.flutter.plugin.common.MethodCall;
-import io.flutter.plugin.common.MethodChannel;
-import io.flutter.plugin.common.PluginRegistry;
-import io.flutter.plugin.platform.PlatformView;
-
 public class FlutterCameraXView implements PlatformView, MethodChannel.MethodCallHandler {
 
     private final MethodChannel methodChannel;
+
     PreviewView mPreviewView;
+
     private Executor executor = Executors.newSingleThreadExecutor();
+
     //    private int REQUEST_CODE_PERMISSIONS = 1001;
 //    private final String[] REQUIRED_PERMISSIONS = new String[]{"android.permission.CAMERA", "android.permission.WRITE_EXTERNAL_STORAGE"};
     Camera camera;
-    int flashMode = ImageCapture.FLASH_MODE_OFF;
+
+    int flashMode = ImageCapture.FLASH_MODE_AUTO;
+
     ImageCapture imageCapture;
+
     int cameraId = 0;
+
     int lensFacing = CameraSelector.LENS_FACING_BACK;
+
     FlutterPlugin.FlutterPluginBinding flutterPluginBinding;
+
     FlutterCameraXPlugin plugin;
+
     Context context;
+
     Rational aspectRatio = new Rational(16, 9);
+
     ProcessCameraProvider cameraProvider;
+
     int CAMERA_REQUEST_ID = 513469796;
+
     boolean playSoundOnClick = false;
+
     boolean saveToFile = true;
+
     boolean torchMode = false;
 
 
-    FlutterCameraXView(Context context, BinaryMessenger messenger, int id, FlutterPlugin.FlutterPluginBinding flutterPluginBinding, FlutterCameraXPlugin plugin) {
+    FlutterCameraXView(Context context, BinaryMessenger messenger, int id,
+                       FlutterPlugin.FlutterPluginBinding flutterPluginBinding, FlutterCameraXPlugin plugin) {
 
 //        textView = new TextView(context);
         methodChannel = new MethodChannel(messenger, Constants.channel_id + "_" + 0);
@@ -112,16 +113,19 @@ public class FlutterCameraXView implements PlatformView, MethodChannel.MethodCal
 //        startCamera(context,flutterPluginBinding,plugin); //start camera if permission has been granted by user
     }
 
-    private void startCamera(final Context context, final FlutterPlugin.FlutterPluginBinding flutterPluginBinding, final FlutterCameraXPlugin plugin) {
-        final ListenableFuture<ProcessCameraProvider> cameraProviderFuture = ProcessCameraProvider.getInstance(context);
+    private void startCamera(final Context context, final FlutterPlugin.FlutterPluginBinding flutterPluginBinding,
+                             final FlutterCameraXPlugin plugin) {
+        final ListenableFuture<ProcessCameraProvider> cameraProviderFuture = ProcessCameraProvider
+                .getInstance(context);
 
         cameraProviderFuture.addListener(new Runnable() {
             @Override
             public void run() {
                 try {
 
-                    if (cameraProvider != null)
+                    if (cameraProvider != null) {
                         return;
+                    }
                     cameraProvider = cameraProviderFuture.get();
 
                     bindPreview(cameraProvider, context, flutterPluginBinding, plugin);
@@ -135,13 +139,12 @@ public class FlutterCameraXView implements PlatformView, MethodChannel.MethodCal
     }
 
     @SuppressLint({"ClickableViewAccessibility", "RestrictedApi"})
-    void bindPreview(@NonNull ProcessCameraProvider cameraProvider, Context context, FlutterPlugin.FlutterPluginBinding flutterPluginBinding, FlutterCameraXPlugin plugin) {
-
+    void bindPreview(@NonNull ProcessCameraProvider cameraProvider, Context context,
+                     FlutterPlugin.FlutterPluginBinding flutterPluginBinding, FlutterCameraXPlugin plugin) {
 
 //        PreviewConfig previewConfig = new PreviewConfig.Builder()
 //                .setTargetResolution(new Size(720, 720))
 //                .build();
-
 
 //        DisplayMetrics disMetrics = new DisplayMetrics();
 //        context.getWindowManager().getDefaultDisplay().getMetrics(disMetrics);
@@ -156,11 +159,10 @@ public class FlutterCameraXView implements PlatformView, MethodChannel.MethodCal
                 .build();
 //        CameraSelector cameraSelector = new CameraSelector().Builder()
 
-
         final CameraSelector cameraSelector = new CameraSelector.Builder()
-                .requireLensFacing(lensFacing == CameraSelector.LENS_FACING_BACK ? CameraSelector.LENS_FACING_BACK : CameraSelector.LENS_FACING_FRONT)
+                .requireLensFacing(lensFacing == CameraSelector.LENS_FACING_BACK ? CameraSelector.LENS_FACING_BACK
+                        : CameraSelector.LENS_FACING_FRONT)
                 .build();
-
 
         final ImageAnalysis imageAnalysis = new ImageAnalysis.Builder()
                 .build();
@@ -169,15 +171,17 @@ public class FlutterCameraXView implements PlatformView, MethodChannel.MethodCal
 
         imageCapture = builder
                 .setTargetResolution(new Size(1080, 1920))
-                .setTargetRotation(plugin.activityPluginBinding.getActivity().getWindowManager().getDefaultDisplay().getRotation())
+                .setTargetRotation(plugin.activityPluginBinding.getActivity().getWindowManager().getDefaultDisplay()
+                        .getRotation())
                 .build();
 
-
-        preview.setSurfaceProvider(mPreviewView.createSurfaceProvider());
+        preview.setSurfaceProvider(mPreviewView.getSurfaceProvider());
         imageCapture.setFlashMode(flashMode);
 
         cameraProvider.unbindAll();
-        camera = cameraProvider.bindToLifecycle(((LifecycleOwner) plugin.activityPluginBinding.getActivity()), cameraSelector, preview, imageAnalysis, imageCapture);
+        camera = cameraProvider
+                .bindToLifecycle(((LifecycleOwner) plugin.activityPluginBinding.getActivity()), cameraSelector,
+                        preview, imageAnalysis, imageCapture);
 
         camera.getCameraControl().enableTorch(torchMode);
 
@@ -189,7 +193,9 @@ public class FlutterCameraXView implements PlatformView, MethodChannel.MethodCal
         mPreviewView.setOnTouchListener(new View.OnTouchListener() {
             @Override
             public boolean onTouch(View view, MotionEvent motionEvent) {
-                MeteringPoint meteringPoint = new DisplayOrientedMeteringPointFactory(mPreviewView.getDisplay(), cameraSelector, mPreviewView.getWidth(), mPreviewView.getHeight()).createPoint(motionEvent.getX(), motionEvent.getY());
+                MeteringPoint meteringPoint = new DisplayOrientedMeteringPointFactory(mPreviewView.getDisplay(),
+                        camera.getCameraInfo(), mPreviewView.getWidth(), mPreviewView.getHeight())
+                        .createPoint(motionEvent.getX(), motionEvent.getY());
                 FocusMeteringAction action = new FocusMeteringAction.Builder(meteringPoint).build();
                 cameraControl.startFocusAndMetering(action);
                 return false;
@@ -236,7 +242,6 @@ public class FlutterCameraXView implements PlatformView, MethodChannel.MethodCal
 //        if(playSoundOnClick)
 //            playClickSound();
 
-
         if (!saveToFile) {
             imageCapture.takePicture(executor, new ImageCapture.OnImageCapturedCallback() {
                 @Override
@@ -276,8 +281,9 @@ public class FlutterCameraXView implements PlatformView, MethodChannel.MethodCal
 
                 @Override
                 public void onImageSaved(@NonNull ImageCapture.OutputFileResults outputFileResults) {
-                    if (playSoundOnClick)
+                    if (playSoundOnClick) {
                         playClickSound();
+                    }
                     plugin.activityPluginBinding.getActivity().runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
@@ -336,8 +342,9 @@ public class FlutterCameraXView implements PlatformView, MethodChannel.MethodCal
             setTorchMode(false);
         }
         flashMode = Utils.getFlashModeFromString(mode);
-        if (imageCapture != null)
+        if (imageCapture != null) {
             imageCapture.setFlashMode(flashMode);
+        }
     }
 
     private void setTorchMode(boolean mode) {
@@ -387,14 +394,19 @@ public class FlutterCameraXView implements PlatformView, MethodChannel.MethodCal
                     plugin.activityPluginBinding.getActivity().requestPermissions(
                             new String[]{Manifest.permission.CAMERA},
                             513469796);
-                    plugin.activityPluginBinding.addRequestPermissionsResultListener(new PluginRegistry.RequestPermissionsResultListener() {
-                        @Override
-                        public boolean onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
-                            if (requestCode == CAMERA_REQUEST_ID && grantResults[0] == PackageManager.PERMISSION_GRANTED)
-                                startCamera(context, flutterPluginBinding, plugin);  //start camera if permission has been granted by user
-                            return false;
-                        }
-                    });
+                    plugin.activityPluginBinding.addRequestPermissionsResultListener(
+                            new PluginRegistry.RequestPermissionsResultListener() {
+                                @Override
+                                public boolean onRequestPermissionsResult(int requestCode, String[] permissions,
+                                                                          int[] grantResults) {
+                                    if (grantResults.length > 0 && requestCode == CAMERA_REQUEST_ID
+                                            && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                                        startCamera(context, flutterPluginBinding,
+                                                plugin);  //start camera if permission has been granted by user
+                                    }
+                                    return false;
+                                }
+                            });
                 }
                 break;
             case Constants.set_preview_aspect_ratio_method_name:
